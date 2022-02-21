@@ -33,3 +33,6 @@ Here are the visualized clusters-
 The original dataset was then modified by dividing the Spending Score into 3 levels- 'Minimal', 'Medium' and 'Excess' and a classification problem was created. The training dataset was fed to 3 models; namely KNN, SVM and RF, out of which RF had the best accuracy and hence was used to make predictions on the test dataset with a final accuracy of 87.5%.
 
 ![](Images/stats.png)
+
+Contributors:
+[Tanishq Deshpande contributed to the project for the SVR model](https://github.com/tanishq252)
