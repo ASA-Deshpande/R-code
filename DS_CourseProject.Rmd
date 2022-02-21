@@ -1,0 +1,320 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+Data Science Course Project- Mall Customers Segmentation
+[Group 1, Batch 3]
+
+
+Loading the Mall_Customers dataset: [Working directory has been set prior to executing this command.]
+```{r}
+
+df = read.csv("Mall_Customers.csv")
+#View(df)
+
+```
+
+Summarizing the Dataset:
+```{r}
+
+dim(df)
+
+```
+
+```{r}
+
+#data types for each attribute
+str(df)
+
+```
+First few observations-
+```{r}
+
+head(df)
+
+```
+
+Summary:
+```{r}
+
+summary(df)
+
+```
+
+Renaming the 'Annual Income' Column for ease:
+```{r}
+
+library(data.table) #for renaming the column
+setnames(df, "AnnualIncome..k..", "AI")
+
+```
+
+Check for empty values:
+```{r}
+
+df = df[complete.cases(df), ]
+nrow(df)
+
+```
+Visualizations:
+```{r}
+
+library(psych)
+plot(df[,3:5])
+pairs.panels(df[,3:5], hist.col = "#00AFBB")
+
+```
+
+Creating Dummy variable for Gender:
+```{r}
+
+library(caret)
+dmy = dummyVars(" ~ Gender", data = df, fullRank=T)
+transformed = data.frame(predict(dmy, newdata = df))
+#print(transformed)
+df$Gender_Male = transformed
+
+```
+
+Boxplots:
+```{r}
+
+x = df[,3:6]
+# boxplot for each attribute on one image
+par(mfrow=c(1,3))
+  for(i in 1:3) {
+  boxplot(x[,i], main=names(x)[i])
+  }
+par(mfrow=c(1,1))
+
+```
+
+Scatterplots:
+```{r}
+
+plot(x = df$AI, y = df$Spending.Score..1.100., xlab = "Annual Income", ylab = "Spending Score", col = "Green", pch = 18, main = "Annual Income vs Spending Score")
+
+```
+
+```{r}
+
+#install.packages("ggthemes")
+library(ggplot2)
+library("ggthemes")
+g1 = ggplot(data = df, mapping = aes(Age, df$Spending.Score..1.100.))
+g1
+g2 = g1 + geom_point(col = "blue") + ggtitle("Age vs Spending Score") + theme_igray()
+g2
+
+```
+
+```{r}
+
+qplot(df$Spending.Score..1.100.,
+      geom="histogram",
+      binwidth = 5,  
+      main = "Histogram for Spending score", 
+      xlab = "Spending Score",  
+      fill=I("blue"), 
+      col=I("red"), 
+      alpha=I(.2))
+
+```
+
+```{r}
+
+table(df$Gender) #categorical vars summary
+n = nrow(df)  
+(percent_gender = table(df$Gender)/n * 100) #By putting the command percent_gender = table(survey$gender)/n * 100 inside a bracket, we assign a vector to the variable percent_gender.
+barplot(percent_gender,ylim=c(0,70), ylab="percent",main="Barplot of Gender",col = c("mistyrose", "lavender"), font.main = 3, border = "dark blue")
+
+```
+
+SVR:
+```{r}
+
+dataSet = df[c(3,5)]
+
+#fitting the model
+library(e1071)
+# SVR model
+regressor = svm(formula = Spending.Score..1.100.~., data = dataSet, type = 'eps-regression')
+
+#predicting the result
+y_pred = predict(regressor, newdata = dataSet)
+y_pred
+dataSet$Salary
+
+
+#visualisation
+library(ggplot2)
+
+ggplot() +
+  geom_point(aes(x = dataSet$Age, y = dataSet$Spending.Score..1.100.),
+             colour = 'red') +
+  geom_line(aes(x = dataSet$Age, y = predict(regressor, newdata = dataSet)),
+            colour = 'blue') +
+  ggtitle("Spending Score prediction using Support Vector Regression")+
+  xlab('Age') + ylab('Spending Score')
+
+print(regressor)
+
+# r squared value
+rss <- sum((y_pred - dataSet$Spending.Score..1.100.) ^ 2)
+tss <- sum((y_pred - mean(dataSet$Spending.Score..1.100.)) ^ 2)
+rsq <- 1 - rss/tss
+rsq
+
+```
+
+Multiple linear regression:
+```{r}
+
+#MLR
+num = as.numeric(unlist(df$Gender_Male))
+#typeof(num)
+df$Gender_Male = num
+model_mlr = lm(df$Spending.Score..1.100.~.-CustomerID-Gender-Gender_Male-AI, data = df)
+#model_mlr = lm(df$Spending.Score..1.100.~.-CustomerID-Gender, data = df)
+summary(model_mlr)
+#polynomial
+```
+
+K-means clustering:
+```{r}
+
+#Elbow method
+library(purrr)
+set.seed(123)
+# function to calculate total intra-cluster sum of square 
+iss <- function(k) {
+  kmeans(df[,3:6],k,iter.max=100, nstart=100, algorithm="Lloyd" )$tot.withinss
+}
+k.values <- 1:10
+iss_values <- map_dbl(k.values, iss)
+plot(k.values, iss_values,
+    type="b", pch = 19, frame = FALSE, 
+    xlab="Number of clusters K",
+    ylab="Total intra-clusters sum of squares")
+
+```
+
+```{r}
+
+k6 = kmeans(df[,3:6],5,iter.max=100,nstart=50,algorithm="Lloyd")
+k6
+
+```
+
+```{r}
+
+set.seed(1)
+ggplot(df[,3:6], aes(x =AI, y = Spending.Score..1.100.)) + 
+  geom_point(stat = "identity", aes(color = as.factor(k6$cluster))) +
+  scale_color_discrete(breaks=c("1", "2", "3", "4", "5"),
+              labels=c("Cluster 1", "Cluster 2", "Cluster 3", "Cluster 4", "Cluster 5")) +
+  ggtitle("Segments of Mall Customers", subtitle = "Using K-means Clustering")
+
+```
+
+Creating a Classification problem
+```{r}
+
+df_scaled = as.data.frame(scale(df[,3:6]))
+#View(df_scaled)
+levelled = cut(df_scaled$Spending.Score..1.100., 3, labels = c("Minimal", "Medium", "Excess"))
+typeof(levelled)
+#levelled
+table(levelled)
+df_classific = df_scaled[,1:2]
+df_classific$Gender = df_scaled$Gender_Male
+#View(df_classific)
+df_classific$Spending_levels = levelled
+nrow(df_classific)
+
+```
+Splitting the dataset into a training dataset and a test dataset:
+```{r}
+
+#install.packages("caTools")
+library(caTools)
+set.seed(124)
+sampleSplit = sample.split(df_classific$Spending_levels, SplitRatio = 0.8)
+#head(sampleSplit, n = 25)
+classific_test = subset(df_classific, sampleSplit == FALSE)
+classific = subset(df_classific, sampleSplit == TRUE)
+nrow(classific)
+nrow(classific_test)
+
+```
+
+Information about the classification levels:
+```{r}
+
+levels(df_classific$Spending_levels)
+percentage = prop.table(table(classific$Spending_levels)) * 100
+cbind(freq = table(classific$Spending_levels), percentage=percentage)
+plot(classific$Spending_levels, col = c("lightblue", "mistyrose", "lightcyan"))
+
+```
+
+```{r}
+
+# Run algorithms using 10-fold cross validation
+control = trainControl(method ="repeatedcv", number=10, repeats=3, search="random")
+metric = "Accuracy"
+
+```
+
+Building 3 models for classification problem:
+```{r}
+
+#install.packages("kernlab")
+
+# k-Nearest Neighbours
+set.seed(7)
+fit.knn = train(Spending_levels~., data=classific, method="knn", metric=metric, trControl=control)
+
+# Support Vector Machines
+set.seed(7)
+fit.svm = train(Spending_levels~., data=classific, method="svmRadial", metric=metric, trControl=control)
+
+# RandomForest
+set.seed(7)
+fit.rf = train(Spending_levels~., data=classific, method="rf", metric=metric, trControl=control)
+
+```
+
+```{r}
+
+results = resamples(list( knn=fit.knn, svm=fit.svm, rf=fit.rf))
+#typeof(results)
+summary(results)
+
+```
+
+```{r}
+
+# compare accuracy of models
+dotplot(results)
+
+```
+
+```{r}
+
+# summarize Best Model
+print(fit.svm)
+
+```
+
+Making predictions on the test dataset using the best model:
+```{r}
+
+# estimate skill of RF on the test dataset
+predictions = predict(fit.svm, classific_test)
+confusionMatrix(predictions, classific_test$Spending_levels)
+
+```
+
+Thank You!
